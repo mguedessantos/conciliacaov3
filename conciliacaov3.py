@@ -106,7 +106,8 @@ def main():
     uploaded_excel = st.file_uploader("Faça o upload do arquivo Excel", type=["xlsx", "xls"])
     if uploaded_excel is not None:
         try:
-            df_excel = pd.read_excel(uploaded_excel)
+            # Explicitando o engine 'openpyxl' para carregar o arquivo Excel
+            df_excel = pd.read_excel(uploaded_excel, engine='openpyxl')
             st.success("Planilha Excel carregada com sucesso!")
         except Exception as e:
             st.error(f"Erro ao carregar o arquivo Excel: {e}")
