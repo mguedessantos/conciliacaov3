@@ -108,8 +108,8 @@ def exibir_comparacao(somas_excel, somas_csv):
         sistema_valor = somas_excel[label]
         bin_valor = somas_csv.get(label, 0)
 
-        # Considerar o valor absoluto para a diferença, mas manter o sinal
-        diferenca = sistema_valor - bin_valor
+        # Considerar a lógica de Sistema negativo e Bin positivo: Bin + Sistema
+        diferenca = bin_valor + sistema_valor
         
         # Exibindo a comparação
         if diferenca != 0:
