@@ -101,7 +101,7 @@ def main():
             "Elo Cred": valores_bin_raw.get("Elo Cred", 0),
             "Elo Deb": valores_bin_raw.get("Elo Deb", 0),
             "Amex Cred": valores_bin_raw.get("Amex Cred", 0) + valores_bin_raw.get("Amex Cred Int", 0),
-            "B2B Master Credito": 0  # Bin normalmente não tem B2B, mas vamos mostrar 0
+            "B2B Master Credito": 0  # Bin normalmente não tem B2B, mas mostramos 0
         }
 
         st.subheader("Comparação entre Sistema e Bin")
@@ -110,14 +110,14 @@ def main():
             sistema_valor = valores_sistema.get(label, 0)
             bin_valor = valores_bin.get(label, 0)
 
-            soma_total = sistema_valor - bin_valor
+            diferenca = sistema_valor - bin_valor  # DIFERENÇA, não soma
 
             st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
 
-            if soma_total != 0:
-                st.markdown(f"<p style='color:red; font-weight:bold;'>Soma Total = R${soma_total:,.2f}</p>", unsafe_allow_html=True)
+            if diferenca != 0:
+                st.markdown(f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca:,.2f}</p>", unsafe_allow_html=True)
             else:
-                st.write(f"Soma Total = R${soma_total:,.2f}")
+                st.write(f"Soma Total (Sistema - Bin) = R${diferenca:,.2f}")
 
 if __name__ == "__main__":
     main()
