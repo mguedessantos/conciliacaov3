@@ -110,14 +110,15 @@ def main():
             sistema_valor = valores_sistema.get(label, 0)
             bin_valor = valores_bin.get(label, 0)
 
-            diferenca = sistema_valor - bin_valor  # DIFERENÇA, não soma
+            diferenca = sistema_valor - bin_valor
+            diferenca_absoluta = abs(diferenca)
 
             st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
 
             if diferenca != 0:
-                st.markdown(f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca:,.2f}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca_absoluta:,.2f}</p>", unsafe_allow_html=True)
             else:
-                st.write(f"Soma Total (Sistema - Bin) = R${diferenca:,.2f}")
+                st.write(f"Soma Total (Sistema - Bin) = R${diferenca_absoluta:,.2f}")
 
 if __name__ == "__main__":
     main()
