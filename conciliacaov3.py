@@ -40,7 +40,7 @@ def conciliacao_financeira(arquivo_csv):
         ('Mastercard', 'Débito', 'Master Deb'),
         ('Maestro', 'Débito', 'Maestro Deb'),
         ('Elo', 'Crédito', 'Elo Cred'),
-        ('Elo', 'Débito', 'Elo Deb'),
+        ('Elo', 'Débito', 'Elo Cred'),
         ('Amex', 'Crédito', 'Amex Cred'),
         ('B2B', 'Master Credito', 'B2B Master Credito')
     ]
@@ -112,11 +112,11 @@ def exibir_comparacao(somas_excel, somas_csv):
         # Considerar a lógica de Sistema negativo e Bin positivo: Bin + Sistema
         diferenca = bin_valor + sistema_valor
         
-        # Exibindo a comparação
+        # Exibindo a comparação de forma profissional
         if diferenca != 0:
-            st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | **DIFERENÇA = {diferenca:,.2f}**", unsafe_allow_html=True)
+            st.markdown(f"**{label}:** Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | **DIFERENÇA = {diferenca:,.2f}**", unsafe_allow_html=True)
         else:
-            st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | DIFERENÇA = 0.00", unsafe_allow_html=True)
+            st.markdown(f"**{label}:** Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | DIFERENÇA = 0.00", unsafe_allow_html=True)
 
 
 def main():
