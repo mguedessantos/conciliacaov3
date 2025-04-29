@@ -1,6 +1,22 @@
 import pandas as pd
 import streamlit as st
 
+# Função para carregar o arquivo Excel dependendo da extensão
+def carregar_excel(uploaded_file):
+    try:
+        # Verificar a extensão do arquivo
+        file_extension = uploaded_file.name.split('.')[-1].lower()
+        
+        if file_extension == 'xls':
+            df = pd.read_excel(uploaded_file, engine='xlrd')  # Usar xlrd para .xls
+        else:
+            raise ValueError("O arquivo precisa ser do tipo .xls")
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar o arquivo Excel: {e}")
+        return None
+
 # Função de pré-processamento e cálculo das somas no CSV
 def conciliacao_financeira(arquivo_csv):
     # Carregar o arquivo CSV com a codificação 'ISO-8859-1'
@@ -103,15 +119,13 @@ def main():
     # Carregar o arquivo Excel
     st.title('Comparação entre Sistema e Bin')
 
-    uploaded_excel = st.file_uploader("Faça o upload do arquivo Excel", type=["xlsx", "xls"])
+    uploaded_excel = st.file_uploader("Faça o upload do arquivo Excel", type=["xls"])
     if uploaded_excel is not None:
-        try:
-            # Explicitando o engine 'openpyxl' para carregar o arquivo Excel
-            df_excel = pd.read_excel(uploaded_excel, engine='openpyxl')
-            st.success("Planilha Excel carregada com sucesso!")
-        except Exception as e:
-            st.error(f"Erro ao carregar o arquivo Excel: {e}")
+        # Carregar o arquivo Excel com a função que detecta a extensão
+        df_excel = carregar_excel(uploaded_excel)
+        if df_excel is None:
             return
+        st.success("Planilha Excel carregada com sucesso!")
 
     # Carregar o arquivo CSV
     uploaded_csv = st.file_uploader("Faça o upload do arquivo CSV", type=["csv"])
