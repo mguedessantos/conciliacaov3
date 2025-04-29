@@ -40,6 +40,7 @@ def conciliacao_financeira(arquivo_csv):
         ('Mastercard', 'Débito', 'Master Deb'),
         ('Maestro', 'Débito', 'Maestro Deb'),
         ('Elo', 'Crédito', 'Elo Cred'),
+        ('Elo', 'Débito', 'Elo Deb'),
         ('Amex', 'Crédito', 'Amex Cred'),
         ('B2B', 'Master Credito', 'B2B Master Credito')
     ]
