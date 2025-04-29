@@ -103,12 +103,12 @@ def main():
                 sistema_valor = valores_sistema.get(label, 0)
                 bin_valor = valores_bin.get(label, 0)
 
-                # Calcula a diferença (Sistema - Bin)
-                diferenca = sistema_valor - bin_valor
+                # Calcular a diferença (Sistema - Bin) e exibir
+                diferenca = abs(sistema_valor - bin_valor)
 
                 st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
 
-                # Exibe a diferença, que deve ser zero se não houver divergência
+                # Exibe a diferença em caso de divergência
                 if diferenca != 0:
                     st.markdown(
                         f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca:,.2f}</p>",
