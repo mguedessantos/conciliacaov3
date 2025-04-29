@@ -108,6 +108,7 @@ def main():
 
                 st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
 
+                # Exibe a diferença, que deve ser zero se não houver divergência
                 if diferenca != 0:
                     st.markdown(
                         f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca:,.2f}</p>",
