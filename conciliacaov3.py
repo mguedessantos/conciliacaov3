@@ -1,50 +1,59 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
 # Função de pré-processamento e cálculo das somas no CSV
 def conciliacao_financeira(arquivo_csv):
-    # Carregar o arquivo CSV
+    # Carregar o arquivo CSV com a codificação 'ISO-8859-1'
     bandeiras_df = pd.read_csv(arquivo_csv, sep=";", encoding="ISO-8859-1")
 
-    # Limpeza de dados
+    # Limpeza de dados: Remover o símbolo 'R$', substituir a vírgula por ponto e remover o ponto de milhar
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].replace({r'R\$': '', r'\.': '', ' ': ''}, regex=True)
-    bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].str.replace(',', '.', regex=False)
+    bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].str.replace(',', '.', regex=False)  # Substituindo vírgula por ponto
+
+    # Converter para float
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].astype(float)
 
-    # Filtrar apenas "Status" válidos
-    bandeiras_df = bandeiras_df[~bandeiras_df['Status'].isin(['Recusada', 'Estornada'])]
+    # Filtrar apenas linhas onde o "Status" não seja "Recusado"
+    bandeiras_df = bandeiras_df[(bandeiras_df['Status'] != 'Recusada') & (bandeiras_df['Status'] != 'Estornada')]
 
+    # Lista de categorias para ordenação
     categorias = [
         ('Visa', 'Crédito', 'Visa Cred'),
-        ('Visa', 'Crédito Internacional', 'Visa Cred Int'),
         ('Visa', 'Débito', 'Visa Deb'),
-        ('Visa', 'Débito Internacional', 'Visa Deb Int'),
         ('Mastercard', 'Crédito', 'Master Cred'),
-        ('Mastercard', 'Crédito International', 'Master Cred Int'),
+        ('Mastercard', 'Débito', 'Master Deb'),
         ('Maestro', 'Débito', 'Maestro Deb'),
-        ('Mastercard', 'Débito Internacional', 'Maestro Deb Int'),
         ('Elo', 'Crédito', 'Elo Cred'),
-        ('Elo', 'Débito', 'Elo Deb'),
         ('Amex', 'Crédito', 'Amex Cred'),
-        ('Amex', 'Crédito Internacional', 'Amex Cred Int')
+        ('B2B', 'Master Credito', 'B2B Master Credito')
     ]
 
     somas_csv = {}
+    # Calculando as somas para cada categoria e armazenando
     for bandeira, tipo, nome_categoria in categorias:
         soma = bandeiras_df[(bandeiras_df['Bandeira'] == bandeira) & (bandeiras_df['Produto'] == tipo)]['Valor bruto'].sum()
         somas_csv[nome_categoria] = soma
 
-    # Ajustes de soma das categorias Int
-    somas_csv['Visa Cred'] += somas_csv.get('Visa Cred Int', 0)
-    somas_csv['Visa Deb'] += somas_csv.get('Visa Deb Int', 0)
-    somas_csv['Master Cred'] += somas_csv.get('Master Cred Int', 0)
-    somas_csv['Maestro Deb'] += somas_csv.get('Maestro Deb Int', 0)
-    somas_csv['Amex Cred'] += somas_csv.get('Amex Cred Int', 0)
+    # Soma específica para categorias combinadas
+    soma_visa_cred = somas_csv.get('Visa Cred', 0) + somas_csv.get('Visa Cred Int', 0)
+    soma_visa_deb = somas_csv.get('Visa Deb', 0) + somas_csv.get('Visa Deb Int', 0)
+    soma_master_cred = somas_csv.get('Master Cred', 0) + somas_csv.get('Master Cred Int', 0)
+    soma_maestro_deb = somas_csv.get('Maestro Deb', 0) + somas_csv.get('Maestro Deb Int', 0)
+    soma_amex_cred = somas_csv.get('Amex Cred', 0) + somas_csv.get('Amex Cred Int', 0)
+
+    # Atualizando os resultados combinados
+    somas_csv['Visa Cred'] = soma_visa_cred
+    somas_csv['Visa Deb'] = soma_visa_deb
+    somas_csv['Master Cred'] = soma_master_cred
+    somas_csv['Maestro Deb'] = soma_maestro_deb
+    somas_csv['Amex Cred'] = soma_amex_cred
 
     return somas_csv
 
-# Função para extrair dados do Excel
+
+# Função para extrair os valores da planilha Excel
 def extrair_dados_excel(df):
+    # Procurar as palavras-chave e extrair os valores
     valores_extraidos = {}
 
     keywords = [
@@ -62,67 +71,58 @@ def extrair_dados_excel(df):
         linha_index = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)].index
         if len(linha_index) > 0:
             linha_index = linha_index[0]
-            dados_abaixo = df.iloc[linha_index + 1:]
+            dados_abaixo = df.iloc[linha_index + 1:]  # Todas as linhas abaixo da linha encontrada
             sub_total_index = dados_abaixo[dados_abaixo.apply(lambda row: row.astype(str).str.contains("SUB-TOTAL TIPO:", case=False).any(), axis=1)].index
             if len(sub_total_index) > 0:
                 sub_total_index = sub_total_index[0]
+                # Encontrar o valor na coluna 'Unnamed: 19'
                 valor = df.iloc[sub_total_index]["Unnamed: 19"]
-                valores_extraidos[label] = float(str(valor).replace('.', '').replace(',', '.'))
+
+                # Convertendo valores financeiros com ponto como separador decimal
+                if isinstance(valor, str):
+                    valor = valor.replace("R$", "").replace(",", "").strip()
+                valores_extraidos[label] = float(valor)
 
     return valores_extraidos
 
-# Função principal do Streamlit
+
+# Função para exibir no Streamlit
+def exibir_comparacao(somas_excel, somas_csv):
+    for label in somas_excel:
+        sistema_valor = somas_excel[label]
+        bin_valor = somas_csv.get(label, 0)
+
+        if sistema_valor != bin_valor:
+            diferenca = sistema_valor - bin_valor
+            st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | **DIFERENÇA = {diferenca:,.2f}**", unsafe_allow_html=True)
+        else:
+            st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | DIFERENÇA = 0.00", unsafe_allow_html=True)
+
+
 def main():
-    st.title("Conciliação Financeira - Sistema x Bin")
+    # Carregar o arquivo Excel
+    st.title('Comparação entre Sistema e Bin')
 
-    st.write("Faça o upload dos arquivos:")
-
-    arquivo_excel = st.file_uploader("Upload do arquivo Excel (.xls ou .xlsx)", type=["xls", "xlsx"])
-    arquivo_csv = st.file_uploader("Upload do arquivo CSV", type=["csv"])
-
-    if arquivo_excel and arquivo_csv:
+    uploaded_excel = st.file_uploader("Faça o upload do arquivo Excel", type=["xlsx", "xls"])
+    if uploaded_excel is not None:
         try:
-            if arquivo_excel.name.lower().endswith('.xls'):
-                df = pd.read_excel(arquivo_excel, engine='xlrd')
-            elif arquivo_excel.name.lower().endswith('.xlsx'):
-                df = pd.read_excel(arquivo_excel, engine='openpyxl')
-            else:
-                st.error("Arquivo Excel inválido.")
-                return
-
-            valores_sistema = extrair_dados_excel(df)
-            valores_bin = conciliacao_financeira(arquivo_csv)
-
-            # Garantir que B2B Master Credito sempre apareça
-            if "B2B Master Credito" not in valores_bin:
-                valores_bin["B2B Master Credito"] = 0
-
-            st.subheader("Resultados da Conciliação:")
-
-            for label in valores_sistema:
-                sistema_valor = valores_sistema.get(label, 0)
-                bin_valor = valores_bin.get(label, 0)
-
-                # Mostrar apenas números sem formatação monetária
-                sistema_valor = abs(sistema_valor)  # Garantir que o valor seja positivo
-                bin_valor = abs(bin_valor)  # Garantir que o valor seja positivo
-
-                # Calcular a diferença (Sistema - Bin)
-                diferenca = abs(sistema_valor - bin_valor)
-
-                st.write(f"{label}: Sistema = {sistema_valor:.2f} | Bin = {bin_valor:.2f}")
-
-                # Exibe a diferença em caso de divergência
-                if diferenca != 0:
-                    st.markdown(
-                        f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = {diferenca:.2f}</p>",
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.write(f"Soma Total (Sistema - Bin) = {diferenca:.2f}")
-
+            df_excel = pd.read_excel(uploaded_excel)
+            st.success("Planilha Excel carregada com sucesso!")
         except Exception as e:
-            st.error(f"Erro ao carregar os arquivos: {e}")
+            st.error(f"Erro ao carregar o arquivo Excel: {e}")
+            return
+
+    # Carregar o arquivo CSV
+    uploaded_csv = st.file_uploader("Faça o upload do arquivo CSV", type=["csv"])
+    if uploaded_csv is not None:
+        somas_csv = conciliacao_financeira(uploaded_csv)
+
+        # Extrair os valores do Excel
+        valores_excel = extrair_dados_excel(df_excel)
+
+        # Exibir os resultados da comparação
+        exibir_comparacao(valores_excel, somas_csv)
+
 
 if __name__ == "__main__":
     main()
