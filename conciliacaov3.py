@@ -103,7 +103,8 @@ def main():
                 sistema_valor = valores_sistema.get(label, 0)
                 bin_valor = valores_bin.get(label, 0)
 
-                diferenca = sistema_valor - bin_valor  # Valor real (não usa abs())
+                # Calcula a diferença (Sistema - Bin)
+                diferenca = sistema_valor - bin_valor
 
                 st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
 
