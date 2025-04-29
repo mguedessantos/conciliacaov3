@@ -9,48 +9,52 @@ Original file is located at
 
 import pandas as pd
 import streamlit as st
+from io import BytesIO
 
 # Função de pré-processamento e cálculo das somas no CSV
 def conciliacao_financeira(arquivo_csv):
+    # Carregar o arquivo CSV com a codificação 'ISO-8859-1'
     bandeiras_df = pd.read_csv(arquivo_csv, sep=";", encoding="ISO-8859-1")
 
+    # Limpeza de dados: Remover o símbolo 'R$', substituir a vírgula por ponto e remover o ponto de milhar
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].replace({r'R\$': '', r'\.': '', ' ': ''}, regex=True)
-    bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].str.replace(',', '.', regex=False)
+    bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].str.replace(',', '.', regex=False)  # Substituindo vírgula por ponto
+
+    # Converter para float
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].astype(float)
 
+    # Filtrar apenas linhas onde o "Status" não seja "Recusado"
     bandeiras_df = bandeiras_df[(bandeiras_df['Status'] != 'Recusada') & (bandeiras_df['Status'] != 'Estornada')]
 
+    # Lista de categorias para ordenação
     categorias = [
         ('Visa', 'Crédito', 'Visa Cred'),
         ('Visa', 'Crédito Internacional', 'Visa Cred Int'),
         ('Visa', 'Débito', 'Visa Deb'),
         ('Visa', 'Débito Internacional', 'Visa Deb Int'),
         ('Mastercard', 'Crédito', 'Master Cred'),
-        ('Mastercard', 'Crédito International', 'Master Cred Int'),
+        ('Mastercard', 'Crédito Internacional', 'Master Cred Int'),
         ('Maestro', 'Débito', 'Maestro Deb'),
         ('Mastercard', 'Débito Internacional', 'Maestro Deb Int'),
         ('Elo', 'Crédito', 'Elo Cred'),
         ('Elo', 'Débito', 'Elo Deb'),
         ('Amex', 'Crédito', 'Amex Cred'),
         ('Amex', 'Crédito Internacional', 'Amex Cred Int'),
+        ('B2B Master Credito', 'B2B Master Credito', 'B2B Master Credito')
     ]
 
     somas_csv = {}
+    # Calculando as somas para cada categoria e armazenando
     for bandeira, tipo, nome_categoria in categorias:
         soma = bandeiras_df[(bandeiras_df['Bandeira'] == bandeira) & (bandeiras_df['Produto'] == tipo)]['Valor bruto'].sum()
         somas_csv[nome_categoria] = soma
-
-    # Ajustes para somar categorias de Int com normal
-    somas_csv['Visa Cred'] += somas_csv.pop('Visa Cred Int', 0)
-    somas_csv['Visa Deb'] += somas_csv.pop('Visa Deb Int', 0)
-    somas_csv['Master Cred'] += somas_csv.pop('Master Cred Int', 0)
-    somas_csv['Maestro Deb'] += somas_csv.pop('Maestro Deb Int', 0)
-    somas_csv['Amex Cred'] += somas_csv.pop('Amex Cred Int', 0)
+        print(f"{nome_categoria}: R${soma:,.2f}")
 
     return somas_csv
 
 # Função para extrair os valores da planilha Excel
 def extrair_dados_excel(df):
+    # Procurar as palavras-chave e extrair os valores
     valores_extraidos = {}
 
     keywords = [
@@ -68,55 +72,71 @@ def extrair_dados_excel(df):
         linha_index = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)].index
         if len(linha_index) > 0:
             linha_index = linha_index[0]
-            dados_abaixo = df.iloc[linha_index + 1:]
+            dados_abaixo = df.iloc[linha_index + 1:]  # Todas as linhas abaixo da linha encontrada
             sub_total_index = dados_abaixo[dados_abaixo.apply(lambda row: row.astype(str).str.contains("SUB-TOTAL TIPO:", case=False).any(), axis=1)].index
             if len(sub_total_index) > 0:
                 sub_total_index = sub_total_index[0]
+                # Encontrar o valor na coluna 'Unnamed: 19'
                 valor = df.iloc[sub_total_index]["Unnamed: 19"]
                 valores_extraidos[label] = valor
 
     return valores_extraidos
 
-# Função principal para a interface do Streamlit
+# Função para fazer o upload do arquivo Excel
+def carregar_arquivo_excel():
+    uploaded = st.file_uploader("Faça o upload da planilha Excel", type=["xls", "xlsx"])
+    return uploaded
+
+# Função para fazer o upload do arquivo CSV
+def carregar_arquivo_csv():
+    uploaded = st.file_uploader("Faça o upload do arquivo CSV", type=["csv"])
+    return uploaded
+
+# Função principal
 def main():
-    st.title('Conciliação Financeira')
+    st.title("Conciliador Financeiro")
 
-    # Upload dos arquivos Excel e CSV
-    excel_file = st.file_uploader("Envie o arquivo Excel", type=['xlsx', 'xls'])
-    csv_file = st.file_uploader("Envie o arquivo CSV", type=['csv'])
+    # Carregar o arquivo Excel
+    excel_file = carregar_arquivo_excel()
 
-    if excel_file and csv_file:
+    if excel_file is not None:
         try:
-            # Carregar o arquivo Excel
-            df = pd.read_excel(excel_file)
+            # Verificar a extensão do arquivo e escolher o engine adequado
+            if excel_file.name.lower().endswith('.xls'):
+                df = pd.read_excel(excel_file, engine='xlrd')  # Usar o engine 'xlrd' para arquivos .xls
+            elif excel_file.name.lower().endswith('.xlsx'):
+                df = pd.read_excel(excel_file, engine='openpyxl')  # Usar o engine 'openpyxl' para arquivos .xlsx
+            else:
+                raise ValueError("O arquivo enviado não é um formato Excel válido (.xls ou .xlsx).")
 
-            # Extração dos dados do Excel
-            valores_excel = extrair_dados_excel(df)
+            st.write("\nPlanilha carregada com sucesso!")
 
-            # Processar o arquivo CSV
-            somas_csv = conciliacao_financeira(csv_file)
-
-            # Forçar mostrar B2B Master Credito, mesmo se não tiver no CSV
-            if 'B2B Master Credito' not in somas_csv:
-                somas_csv['B2B Master Credito'] = 0.0
-
-            # Mostrar os resultados na interface
-            st.subheader('Resultados da Comparação')
-
-            for label in valores_excel:
-                if label in somas_csv:
-                    valor_excel = float(valores_excel[label])
-                    valor_csv = float(somas_csv[label])
-                    soma_total = valor_excel + valor_csv
-
-                    if round(soma_total, 2) != 0:
-                        st.markdown(f"{label}: Sistema = **R${valor_excel:,.2f}** | Bin = **R${valor_csv:,.2f}** | Soma Total = <span style='background-color: red; color: white;'>R${soma_total:,.2f}</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"{label}: Sistema = **R${valor_excel:,.2f}** | Bin = **R${valor_csv:,.2f}** | Soma Total = R${soma_total:,.2f}")
-                else:
-                    st.markdown(f"{label} não encontrado no CSV.")
         except Exception as e:
-            st.error(f"Ocorreu um erro ao processar os arquivos: {e}")
+            st.error(f"Erro ao abrir o arquivo Excel: {e}")
+            return
 
-if __name__ == "__main__":
-    main()
+        # Extração de dados da planilha Excel
+        valores_excel = extrair_dados_excel(df)
+        st.subheader("Valores extraídos da planilha Excel:")
+        for label, valor in valores_excel.items():
+            st.write(f"{label}: R${valor:,.2f}")
+
+    # Carregar o arquivo CSV
+    csv_file = carregar_arquivo_csv()
+    if csv_file is not None:
+        # Chama a função de análise do arquivo CSV
+        somas_csv = conciliacao_financeira(csv_file)
+
+        # Comparando os valores extraídos da planilha Excel com os valores do CSV
+        st.subheader("Comparação entre valores extraídos da planilha Excel e CSV:")
+
+        for label in valores_excel:
+            if label in somas_csv:
+                soma_total = valores_excel[label] + somas_csv[label]
+                if soma_total != 0:
+                    st.markdown(f"**{label}:** Sistema = R${valores_excel[label]:,.2f} | Bin = R${somas_csv[label]:,.2f} | Soma Total = R${soma_total:,.2f}", unsafe_allow_html=True)
+                else:
+                    st.write(f"{label}: Sistema = R${valores_excel[label]:,.2f} | Bin = R${somas_csv[label]:,.2f} | Soma Total = R${soma_total:,.2f}")
+
+            else:
+                st.write(f"{label} não encontrado no CSV.")
