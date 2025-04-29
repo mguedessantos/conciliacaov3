@@ -108,8 +108,11 @@ def exibir_comparacao(somas_excel, somas_csv):
         sistema_valor = somas_excel[label]
         bin_valor = somas_csv.get(label, 0)
 
-        if sistema_valor != bin_valor:
-            diferenca = sistema_valor - bin_valor
+        # Considerar o valor absoluto para a diferença, mas manter o sinal
+        diferenca = sistema_valor - bin_valor
+        
+        # Exibindo a comparação
+        if diferenca != 0:
             st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | **DIFERENÇA = {diferenca:,.2f}**", unsafe_allow_html=True)
         else:
             st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | DIFERENÇA = 0.00", unsafe_allow_html=True)
