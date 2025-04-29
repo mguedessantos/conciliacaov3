@@ -3,13 +3,16 @@ import pandas as pd
 
 # Função de pré-processamento e cálculo das somas no CSV
 def conciliacao_financeira(arquivo_csv):
+    # Carregar o arquivo CSV
     bandeiras_df = pd.read_csv(arquivo_csv, sep=";", encoding="ISO-8859-1")
 
+    # Limpeza de dados
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].replace({r'R\$': '', r'\.': '', ' ': ''}, regex=True)
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].str.replace(',', '.', regex=False)
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].astype(float)
 
-    bandeiras_df = bandeiras_df[(bandeiras_df['Status'] != 'Recusada') & (bandeiras_df['Status'] != 'Estornada')]
+    # Filtrar apenas "Status" válidos
+    bandeiras_df = bandeiras_df[~bandeiras_df['Status'].isin(['Recusada', 'Estornada'])]
 
     categorias = [
         ('Visa', 'Crédito', 'Visa Cred'),
@@ -31,9 +34,16 @@ def conciliacao_financeira(arquivo_csv):
         soma = bandeiras_df[(bandeiras_df['Bandeira'] == bandeira) & (bandeiras_df['Produto'] == tipo)]['Valor bruto'].sum()
         somas_csv[nome_categoria] = soma
 
+    # Ajustes de soma das categorias Int
+    somas_csv['Visa Cred'] += somas_csv.get('Visa Cred Int', 0)
+    somas_csv['Visa Deb'] += somas_csv.get('Visa Deb Int', 0)
+    somas_csv['Master Cred'] += somas_csv.get('Master Cred Int', 0)
+    somas_csv['Maestro Deb'] += somas_csv.get('Maestro Deb Int', 0)
+    somas_csv['Amex Cred'] += somas_csv.get('Amex Cred Int', 0)
+
     return somas_csv
 
-# Função para extrair os valores da planilha Excel
+# Função para extrair dados do Excel
 def extrair_dados_excel(df):
     valores_extraidos = {}
 
@@ -57,68 +67,56 @@ def extrair_dados_excel(df):
             if len(sub_total_index) > 0:
                 sub_total_index = sub_total_index[0]
                 valor = df.iloc[sub_total_index]["Unnamed: 19"]
-                valores_extraidos[label] = float(valor)
+                valores_extraidos[label] = float(str(valor).replace('.', '').replace(',', '.'))
 
     return valores_extraidos
 
-# Função principal
+# Função principal do Streamlit
 def main():
-    st.title("Conciliação Financeira")
+    st.title("Conciliação Financeira - Sistema x Bin")
 
-    st.write("Faça upload da planilha Excel (.xls ou .xlsx) e do arquivo CSV.")
+    st.write("Faça o upload dos arquivos:")
 
-    uploaded_excel = st.file_uploader("Upload da Planilha Excel", type=["xls", "xlsx"])
-    uploaded_csv = st.file_uploader("Upload do Arquivo CSV", type=["csv"])
+    arquivo_excel = st.file_uploader("Upload do arquivo Excel (.xls ou .xlsx)", type=["xls", "xlsx"])
+    arquivo_csv = st.file_uploader("Upload do arquivo CSV", type=["csv"])
 
-    if uploaded_excel and uploaded_csv:
+    if arquivo_excel and arquivo_csv:
         try:
-            if uploaded_excel.name.lower().endswith('.xls'):
-                df_excel = pd.read_excel(uploaded_excel, engine='xlrd')
+            if arquivo_excel.name.lower().endswith('.xls'):
+                df = pd.read_excel(arquivo_excel, engine='xlrd')
+            elif arquivo_excel.name.lower().endswith('.xlsx'):
+                df = pd.read_excel(arquivo_excel, engine='openpyxl')
             else:
-                df_excel = pd.read_excel(uploaded_excel, engine='openpyxl')
+                st.error("Arquivo Excel inválido.")
+                return
+
+            valores_sistema = extrair_dados_excel(df)
+            valores_bin = conciliacao_financeira(arquivo_csv)
+
+            # Garantir que B2B Master Credito sempre apareça
+            if "B2B Master Credito" not in valores_bin:
+                valores_bin["B2B Master Credito"] = 0
+
+            st.subheader("Resultados da Conciliação:")
+
+            for label in valores_sistema:
+                sistema_valor = valores_sistema.get(label, 0)
+                bin_valor = valores_bin.get(label, 0)
+
+                diferenca = sistema_valor - bin_valor  # Valor real (não usa abs())
+
+                st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
+
+                if diferenca != 0:
+                    st.markdown(
+                        f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca:,.2f}</p>",
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.write(f"Soma Total (Sistema - Bin) = R${diferenca:,.2f}")
+
         except Exception as e:
-            st.error(f"Erro ao carregar o arquivo Excel: {e}")
-            return
-
-        try:
-            valores_sistema = extrair_dados_excel(df_excel)
-        except Exception as e:
-            st.error(f"Erro ao extrair dados do Excel: {e}")
-            return
-
-        try:
-            valores_bin_raw = conciliacao_financeira(uploaded_csv)
-        except Exception as e:
-            st.error(f"Erro ao processar o arquivo CSV: {e}")
-            return
-
-        # Agrupar Visa Cred + Visa Cred Int, etc.
-        valores_bin = {
-            "Visa Cred": valores_bin_raw.get("Visa Cred", 0) + valores_bin_raw.get("Visa Cred Int", 0),
-            "Visa Deb": valores_bin_raw.get("Visa Deb", 0) + valores_bin_raw.get("Visa Deb Int", 0),
-            "Master Cred": valores_bin_raw.get("Master Cred", 0) + valores_bin_raw.get("Master Cred Int", 0),
-            "Maestro Deb": valores_bin_raw.get("Maestro Deb", 0) + valores_bin_raw.get("Maestro Deb Int", 0),
-            "Elo Cred": valores_bin_raw.get("Elo Cred", 0),
-            "Elo Deb": valores_bin_raw.get("Elo Deb", 0),
-            "Amex Cred": valores_bin_raw.get("Amex Cred", 0) + valores_bin_raw.get("Amex Cred Int", 0),
-            "B2B Master Credito": 0  # Bin normalmente não tem B2B, mas mostramos 0
-        }
-
-        st.subheader("Comparação entre Sistema e Bin")
-
-        for label in valores_sistema:
-            sistema_valor = valores_sistema.get(label, 0)
-            bin_valor = valores_bin.get(label, 0)
-
-            diferenca = sistema_valor - bin_valor
-            diferenca_absoluta = abs(diferenca)
-
-            st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
-
-            if diferenca != 0:
-                st.markdown(f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca_absoluta:,.2f}</p>", unsafe_allow_html=True)
-            else:
-                st.write(f"Soma Total (Sistema - Bin) = R${diferenca_absoluta:,.2f}")
+            st.error(f"Erro ao carregar os arquivos: {e}")
 
 if __name__ == "__main__":
     main()
