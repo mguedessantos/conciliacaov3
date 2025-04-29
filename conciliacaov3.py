@@ -103,19 +103,23 @@ def main():
                 sistema_valor = valores_sistema.get(label, 0)
                 bin_valor = valores_bin.get(label, 0)
 
-                # Calcular a diferença (Sistema - Bin) e exibir
+                # Mostrar apenas números sem formatação monetária
+                sistema_valor = abs(sistema_valor)  # Garantir que o valor seja positivo
+                bin_valor = abs(bin_valor)  # Garantir que o valor seja positivo
+
+                # Calcular a diferença (Sistema - Bin)
                 diferenca = abs(sistema_valor - bin_valor)
 
-                st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
+                st.write(f"{label}: Sistema = {sistema_valor:.2f} | Bin = {bin_valor:.2f}")
 
                 # Exibe a diferença em caso de divergência
                 if diferenca != 0:
                     st.markdown(
-                        f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = R${diferenca:,.2f}</p>",
+                        f"<p style='color:red; font-weight:bold;'>Soma Total (Sistema - Bin) = {diferenca:.2f}</p>",
                         unsafe_allow_html=True
                     )
                 else:
-                    st.write(f"Soma Total (Sistema - Bin) = R${diferenca:,.2f}")
+                    st.write(f"Soma Total (Sistema - Bin) = {diferenca:.2f}")
 
         except Exception as e:
             st.error(f"Erro ao carregar os arquivos: {e}")
