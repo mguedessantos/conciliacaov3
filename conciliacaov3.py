@@ -1,8 +1,7 @@
-
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
-# Função para pré-processamento e cálculo das somas no CSV
+# Função de pré-processamento e cálculo das somas no CSV
 def conciliacao_financeira(arquivo_csv):
     bandeiras_df = pd.read_csv(arquivo_csv, sep=";", encoding="ISO-8859-1")
 
@@ -24,33 +23,17 @@ def conciliacao_financeira(arquivo_csv):
         ('Elo', 'Crédito', 'Elo Cred'),
         ('Elo', 'Débito', 'Elo Deb'),
         ('Amex', 'Crédito', 'Amex Cred'),
-        ('Amex', 'Crédito Internacional', 'Amex Cred Int'),
+        ('Amex', 'Crédito Internacional', 'Amex Cred Int')
     ]
 
     somas_csv = {}
-
     for bandeira, tipo, nome_categoria in categorias:
-        soma = bandeiras_df[
-            (bandeiras_df['Bandeira'] == bandeira) &
-            (bandeiras_df['Produto'] == tipo)
-        ]['Valor bruto'].sum()
+        soma = bandeiras_df[(bandeiras_df['Bandeira'] == bandeira) & (bandeiras_df['Produto'] == tipo)]['Valor bruto'].sum()
         somas_csv[nome_categoria] = soma
-
-    # Combinar categorias *_Int nas suas principais
-    somas_csv['Visa Cred'] += somas_csv.get('Visa Cred Int', 0)
-    somas_csv['Visa Deb'] += somas_csv.get('Visa Deb Int', 0)
-    somas_csv['Master Cred'] += somas_csv.get('Master Cred Int', 0)
-    somas_csv['Maestro Deb'] += somas_csv.get('Maestro Deb Int', 0)
-    somas_csv['Amex Cred'] += somas_csv.get('Amex Cred Int', 0)
-
-    # Remover categorias *_Int que já foram somadas
-    for key in ['Visa Cred Int', 'Visa Deb Int', 'Master Cred Int', 'Maestro Deb Int', 'Amex Cred Int']:
-        if key in somas_csv:
-            del somas_csv[key]
 
     return somas_csv
 
-# Função para extrair os dados da planilha Excel
+# Função para extrair os valores da planilha Excel
 def extrair_dados_excel(df):
     valores_extraidos = {}
 
@@ -74,62 +57,67 @@ def extrair_dados_excel(df):
             if len(sub_total_index) > 0:
                 sub_total_index = sub_total_index[0]
                 valor = df.iloc[sub_total_index]["Unnamed: 19"]
-                valores_extraidos[label] = valor
+                valores_extraidos[label] = float(valor)
 
     return valores_extraidos
 
-# Função principal (Streamlit)
+# Função principal
 def main():
     st.title("Conciliação Financeira")
 
-    st.write("Faça upload da planilha Excel (.xls ou .xlsx)")
-    arquivo_excel = st.file_uploader("Upload do arquivo Excel", type=["xls", "xlsx"])
+    st.write("Faça upload da planilha Excel (.xls ou .xlsx) e do arquivo CSV.")
 
-    if arquivo_excel is not None:
+    uploaded_excel = st.file_uploader("Upload da Planilha Excel", type=["xls", "xlsx"])
+    uploaded_csv = st.file_uploader("Upload do Arquivo CSV", type=["csv"])
+
+    if uploaded_excel and uploaded_csv:
         try:
-            if arquivo_excel.name.lower().endswith('.xls'):
-                df_excel = pd.read_excel(arquivo_excel, engine='xlrd')
-            elif arquivo_excel.name.lower().endswith('.xlsx'):
-                df_excel = pd.read_excel(arquivo_excel, engine='openpyxl')
+            if uploaded_excel.name.lower().endswith('.xls'):
+                df_excel = pd.read_excel(uploaded_excel, engine='xlrd')
             else:
-                st.error("Formato de arquivo inválido. Envie um arquivo .xls ou .xlsx")
-                return
-            st.success("Arquivo Excel carregado com sucesso!")
+                df_excel = pd.read_excel(uploaded_excel, engine='openpyxl')
         except Exception as e:
             st.error(f"Erro ao carregar o arquivo Excel: {e}")
             return
 
-        valores_excel = extrair_dados_excel(df_excel)
+        try:
+            valores_sistema = extrair_dados_excel(df_excel)
+        except Exception as e:
+            st.error(f"Erro ao extrair dados do Excel: {e}")
+            return
 
-        st.write("Faça upload do arquivo CSV")
-        arquivo_csv = st.file_uploader("Upload do arquivo CSV", type=["csv"])
+        try:
+            valores_bin_raw = conciliacao_financeira(uploaded_csv)
+        except Exception as e:
+            st.error(f"Erro ao processar o arquivo CSV: {e}")
+            return
 
-        if arquivo_csv is not None:
-            try:
-                somas_csv = conciliacao_financeira(arquivo_csv)
-            except Exception as e:
-                st.error(f"Erro ao processar o arquivo CSV: {e}")
-                return
+        # Agrupar Visa Cred + Visa Cred Int, etc.
+        valores_bin = {
+            "Visa Cred": valores_bin_raw.get("Visa Cred", 0) + valores_bin_raw.get("Visa Cred Int", 0),
+            "Visa Deb": valores_bin_raw.get("Visa Deb", 0) + valores_bin_raw.get("Visa Deb Int", 0),
+            "Master Cred": valores_bin_raw.get("Master Cred", 0) + valores_bin_raw.get("Master Cred Int", 0),
+            "Maestro Deb": valores_bin_raw.get("Maestro Deb", 0) + valores_bin_raw.get("Maestro Deb Int", 0),
+            "Elo Cred": valores_bin_raw.get("Elo Cred", 0),
+            "Elo Deb": valores_bin_raw.get("Elo Deb", 0),
+            "Amex Cred": valores_bin_raw.get("Amex Cred", 0) + valores_bin_raw.get("Amex Cred Int", 0),
+            "B2B Master Credito": 0  # Bin normalmente não tem B2B, mas vamos mostrar 0
+        }
 
-            st.header("Comparação de Valores")
+        st.subheader("Comparação entre Sistema e Bin")
 
-            for label in valores_excel.keys():
-                valor_excel = valores_excel.get(label, 0)
-                valor_csv = somas_csv.get(label, 0)
+        for label in valores_sistema:
+            sistema_valor = valores_sistema.get(label, 0)
+            bin_valor = valores_bin.get(label, 0)
 
-                soma_total = float(valor_excel) + float(valor_csv)
+            soma_total = sistema_valor - bin_valor
 
-                if label == "B2B Master Credito":
-                    # Sempre mostrar B2B, mesmo que não tenha valor no CSV
-                    valor_csv = somas_csv.get(label, 0)
+            st.write(f"{label}: Sistema = R${sistema_valor:,.2f} | Bin = R${bin_valor:,.2f}")
 
-                if abs(soma_total) > 0.01:
-                    st.markdown(
-                        f"<span style='color: red;'>{label}: Sistema = R${valor_excel:,.2f} | Bin = R${valor_csv:,.2f} | Soma Total = R${soma_total:,.2f}</span>",
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.write(f"{label}: Sistema = R${valor_excel:,.2f} | Bin = R${valor_csv:,.2f} | Soma Total = R${soma_total:,.2f}")
+            if soma_total != 0:
+                st.markdown(f"<p style='color:red; font-weight:bold;'>Soma Total = R${soma_total:,.2f}</p>", unsafe_allow_html=True)
+            else:
+                st.write(f"Soma Total = R${soma_total:,.2f}")
 
 if __name__ == "__main__":
     main()
