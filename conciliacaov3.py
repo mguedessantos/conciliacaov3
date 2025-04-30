@@ -4,8 +4,7 @@ import streamlit as st
 # Função para carregar o arquivo Excel dependendo da extensão
 def carregar_excel(uploaded_file):
     try:
-        # Tentar carregar diretamente, já que o Streamlit já validou o tipo
-        df = pd.read_excel(uploaded_file, engine='xlrd')
+        df = pd.read_excel(uploaded_file)  # pandas detecta automaticamente o engine
         return df
     except Exception as e:
         st.error(f"Erro ao carregar o arquivo Excel: {e}")
