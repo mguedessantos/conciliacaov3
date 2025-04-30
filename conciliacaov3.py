@@ -5,12 +5,10 @@ import streamlit as st
 def carregar_excel(uploaded_file):
     try:
         file_extension = uploaded_file.name.split('.')[-1].lower()
-        
         if file_extension == 'xls':
-            df = pd.read_excel(uploaded_file, engine='xlrd')  # Usar xlrd para .xls
+            df = pd.read_excel(uploaded_file, engine='xlrd')
         else:
             raise ValueError("O arquivo precisa ser do tipo .xls")
-        
         return df
     except Exception as e:
         st.error(f"Erro ao carregar o arquivo Excel: {e}")
@@ -19,9 +17,11 @@ def carregar_excel(uploaded_file):
 # Função de pré-processamento e cálculo das somas no CSV
 def conciliacao_financeira(arquivo_csv):
     bandeiras_df = pd.read_csv(arquivo_csv, sep=";", encoding="ISO-8859-1")
+
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].replace({r'R\$': '', r'\.': '', ' ': ''}, regex=True)
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].str.replace(',', '.', regex=False)
     bandeiras_df['Valor bruto'] = bandeiras_df['Valor bruto'].astype(float)
+
     bandeiras_df = bandeiras_df[(bandeiras_df['Status'] != 'Recusada') & (bandeiras_df['Status'] != 'Estornada')]
 
     categorias = [
@@ -41,17 +41,11 @@ def conciliacao_financeira(arquivo_csv):
         soma = bandeiras_df[(bandeiras_df['Bandeira'] == bandeira) & (bandeiras_df['Produto'] == tipo)]['Valor bruto'].sum()
         somas_csv[nome_categoria] = soma
 
-    soma_visa_cred = somas_csv.get('Visa Cred', 0) + somas_csv.get('Visa Cred Int', 0)
-    soma_visa_deb = somas_csv.get('Visa Deb', 0) + somas_csv.get('Visa Deb Int', 0)
-    soma_master_cred = somas_csv.get('Master Cred', 0) + somas_csv.get('Master Cred Int', 0)
-    soma_maestro_deb = somas_csv.get('Maestro Deb', 0) + somas_csv.get('Maestro Deb Int', 0)
-    soma_amex_cred = somas_csv.get('Amex Cred', 0) + somas_csv.get('Amex Cred Int', 0)
-
-    somas_csv['Visa Cred'] = soma_visa_cred
-    somas_csv['Visa Deb'] = soma_visa_deb
-    somas_csv['Master Cred'] = soma_master_cred
-    somas_csv['Maestro Deb'] = soma_maestro_deb
-    somas_csv['Amex Cred'] = soma_amex_cred
+    somas_csv['Visa Cred'] += somas_csv.get('Visa Cred Int', 0)
+    somas_csv['Visa Deb'] += somas_csv.get('Visa Deb Int', 0)
+    somas_csv['Master Cred'] += somas_csv.get('Master Cred Int', 0)
+    somas_csv['Maestro Deb'] += somas_csv.get('Maestro Deb Int', 0)
+    somas_csv['Amex Cred'] += somas_csv.get('Amex Cred Int', 0)
 
     return somas_csv
 
@@ -81,45 +75,43 @@ def extrair_dados_excel(df):
                 valor = df.iloc[sub_total_index]["Unnamed: 19"]
                 if isinstance(valor, str):
                     valor = valor.replace("R$", "").replace(",", "").strip()
-                valores_extraidos[label] = float(valor)
-
+                try:
+                    valores_extraidos[label] = float(valor)
+                except:
+                    st.warning(f"Não foi possível converter o valor de {label}.")
     return valores_extraidos
 
 # Função para exibir no Streamlit
 def exibir_comparacao(somas_excel, somas_csv):
+    st.subheader("Resultado da Comparação")
     for label in somas_excel:
         sistema_valor = somas_excel[label]
         bin_valor = somas_csv.get(label, 0)
         diferenca = bin_valor + sistema_valor
-        
+
         if diferenca != 0:
-            st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | **DIFERENÇA = {diferenca:,.2f}**", unsafe_allow_html=True)
+            st.markdown(f"🔍 **{label}**: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | **Diferença = {diferenca:,.2f}**")
         else:
-            st.markdown(f"{label}: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | DIFERENÇA = 0.00", unsafe_allow_html=True)
+            st.markdown(f"✅ **{label}**: Sistema = {sistema_valor:,.2f} | Bin = {bin_valor:,.2f} | Diferença = 0.00")
 
+# Função principal
 def main():
-    st.title('Comparação entre Sistema e Bin')
+    st.title("📊 Comparação Financeira: Sistema vs Bin")
+    st.write("Envie os dois arquivos necessários para realizar a comparação.")
 
-    uploaded_excel = st.file_uploader("📎 Faça o upload do arquivo Excel (.xls)", type=["xls"])
+    uploaded_excel = st.file_uploader("📎 Upload do Arquivo Excel (.xls)", type=["xls"])
+    uploaded_csv = st.file_uploader("📎 Upload do Arquivo CSV", type=["csv"])
 
-    if uploaded_excel is not None:
-        st.info(f"Arquivo enviado: `{uploaded_excel.name}`")
-
-        # Verifica se a extensão termina com .xls (evita arquivos com .xls.xlsx ou similares)
-        if not uploaded_excel.name.lower().endswith(".xls"):
-            st.error("❌ O arquivo enviado parece não ser um .xls válido. Verifique se a extensão está correta.")
-            st.stop()
-
+    if uploaded_excel and uploaded_csv:
         df_excel = carregar_excel(uploaded_excel)
-        if df_excel is None:
-            st.stop()
-        st.success("✅ Planilha Excel carregada com sucesso!")
-
-    uploaded_csv = st.file_uploader("📄 Faça o upload do arquivo CSV", type=["csv"])
-    if uploaded_csv is not None and uploaded_excel is not None:
-        somas_csv = conciliacao_financeira(uploaded_csv)
-        valores_excel = extrair_dados_excel(df_excel)
-        exibir_comparacao(valores_excel, somas_csv)
+        if df_excel is not None:
+            valores_excel = extrair_dados_excel(df_excel)
+            somas_csv = conciliacao_financeira(uploaded_csv)
+            exibir_comparacao(valores_excel, somas_csv)
+        else:
+            st.error("Erro ao processar o arquivo Excel.")
+    else:
+        st.info("Aguardando upload de ambos os arquivos (.xls e .csv)...")
 
 if __name__ == "__main__":
     main()
